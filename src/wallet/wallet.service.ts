@@ -58,9 +58,49 @@ export class WalletService {
     };
   }
 
-  // POST /wallet/topup/initiate — will be filled in next phase
+  // ── API 2: POST /wallet/topup/initiate ────────────────────────
   async initiateTopup(dto: InitiateTopupDto) {
-    return { message: 'initiateTopup stub' };
+
+    // 1. Find the topup request
+    const topup = await this.topupRepo.findOne({
+      where: { topup_id: dto.topup_id },
+    });
+
+    if (!topup) {
+      throw new NotFoundException(`Topup ${dto.topup_id} not found`);
+    }
+
+    if (topup.status !== 'pending') {
+      throw new BadRequestException(
+        `Topup is already ${topup.status} — cannot initiate again`
+      );
+    }
+
+    // 2. Generate transaction ID
+    const transaction_id = `TXN${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+
+    // 3. Mock UPI payment link (looks like a real UPI deep-link)
+    const payment_link = `upi://pay?pa=wallet@upi&pn=WalletApp&am=${topup.amount}&tn=${transaction_id}&cu=INR`;
+
+    // 4. Mock QR code (base64 encoded version of the payment link)
+    const qr_code = Buffer.from(payment_link).toString('base64');
+
+    // 5. Save transaction to DB
+    const transaction = await this.transactionRepo.save({
+      transaction_id,
+      topup_id:       dto.topup_id,
+      payment_link,
+      qr_code,
+      payment_status: 'pending',
+      processed:      false,
+    });
+
+    return {
+      transaction_id: transaction.transaction_id,
+      payment_link:   transaction.payment_link,
+      qr_code:        transaction.qr_code,
+      status:         transaction.payment_status,
+    };
   }
 
   // GET /wallet/:user_id — will be filled in next phase
