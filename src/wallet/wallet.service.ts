@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository }       from 'typeorm';
-import { v4 as uuidv4 }    from 'uuid';
+import { randomUUID }       from 'crypto';
 import { CACHE_MANAGER }    from '@nestjs/cache-manager';
 
 
@@ -43,7 +43,7 @@ export class WalletService {
     }
 
     // 2. Generate unique topup ID → "TUP" + 10 random chars
-    const topup_id = `TUP-${Date.now()}-${uuidv4().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+    const topup_id = `TUP-${Date.now()}-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 
     // 3. Create wallet for this user if it doesn't exist yet
     let wallet = await this.walletRepo.findOne({
@@ -89,7 +89,7 @@ export class WalletService {
     }
 
     // 2. Generate transaction ID
-    const transaction_id = `TXN-${Date.now()}-${uuidv4().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
+    const transaction_id = `TXN-${Date.now()}-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 
     // 3. Mock UPI payment link (looks like a real UPI deep-link)
     const payment_link = `upi://pay?pa=wallet@upi&pn=WalletApp&am=${topup.amount}&tn=${transaction_id}&cu=INR`;
@@ -173,4 +173,4 @@ export class WalletService {
     transaction_id: transaction?.transaction_id ?? null,
   };
     }
-}
+}
