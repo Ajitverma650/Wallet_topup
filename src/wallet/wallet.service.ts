@@ -1,5 +1,4 @@
-
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository }              from '@nestjs/typeorm';
 import { Repository }                    from 'typeorm';
 import { v4 as uuidv4 }                from 'uuid';
@@ -23,9 +22,40 @@ export class WalletService {
     private transactionRepo: Repository<Transaction>,
   ) {}
 
-  // POST /wallet/topup — will be filled in next phase
+  // ── API 1: POST /wallet/topup ──────────────────────────────────
   async createTopup(dto: CreateTopupDto) {
-    return { message: 'createTopup stub' };
+
+    // 1. Validate amount is not zero or negative
+    if (dto.amount <= 0) {
+      throw new BadRequestException('Amount must be greater than 0');
+    }
+
+    // 2. Generate unique topup ID → "TUP" + 10 random chars
+    const topup_id = `TUP${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+
+    // 3. Create wallet for this user if it doesn't exist yet
+    let wallet = await this.walletRepo.findOne({
+      where: { user_id: dto.user_id },
+    });
+    if (!wallet) {
+      wallet = await this.walletRepo.save({ user_id: dto.user_id, balance: 0 });
+    }
+
+    // 4. Save the topup request to DB with status = pending
+    const topup = await this.topupRepo.save({
+      topup_id,
+      user_id: dto.user_id,
+      amount:  dto.amount,
+      status:  'pending',
+    });
+
+    // 5. Return response matching assignment spec
+    return {
+      topup_id: topup.topup_id,
+      user_id:  topup.user_id,
+      amount:   topup.amount,
+      status:   topup.status,
+    };
   }
 
   // POST /wallet/topup/initiate — will be filled in next phase
