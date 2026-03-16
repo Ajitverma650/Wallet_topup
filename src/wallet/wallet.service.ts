@@ -150,8 +150,27 @@ export class WalletService {
     };
   }
 
+  
   // GET /wallet/topup/:topup_id — will be filled in next phase
   async getTopupStatus(topupId: string) {
-    return { message: 'getTopupStatus stub' };
+
+  const topup = await this.topupRepo.findOne({
+    where: { topup_id: topupId },
+  });
+
+  if (!topup) {
+    throw new NotFoundException(`Topup ${topupId} not found`);
   }
+
+  // find linked transaction if it exists
+  const transaction = await this.transactionRepo.findOne({
+    where: { topup_id: topupId },
+  });
+
+  return {
+    topup_id:       topup.topup_id,
+    status:         topup.status,
+    transaction_id: transaction?.transaction_id ?? null,
+  };
+    }
 }
