@@ -19,15 +19,16 @@ export class WalletController {
     return this.walletService.initiateTopup(dto);
   }
 
-  // GET /wallet/:user_id
-  @Get(':user_id')
-  getBalance(@Param('user_id') userId: string) {
-    return this.walletService.getBalance(userId);
-  }
-
-  // GET /wallet/topup/:topup_id
+  // ✅ FIX: static-prefix routes MUST come before dynamic wildcard routes
+  // GET /wallet/topup/:topup_id  ← declare first
   @Get('topup/:topup_id')
   getTopupStatus(@Param('topup_id') topupId: string) {
     return this.walletService.getTopupStatus(topupId);
   }
-}
+
+  // GET /wallet/:user_id  ← wildcard catch-all declared last
+  @Get(':user_id')
+  getBalance(@Param('user_id') userId: string) {
+    return this.walletService.getBalance(userId);
+  }
+}

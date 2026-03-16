@@ -35,7 +35,7 @@ import { PaymentsModule } from './payments/payments.module';
       useFactory: async (config: ConfigService) => ({
         store: redisStore,
         url:   config.get<string>('REDIS_URL'),
-        ttl:   60,
+        ttl:   60000, // 60 seconds cache TTL
       }),
     }),
 

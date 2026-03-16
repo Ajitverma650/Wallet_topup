@@ -43,7 +43,7 @@ export class WalletService {
     }
 
     // 2. Generate unique topup ID → "TUP" + 10 random chars
-    const topup_id = `TUP${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+    const topup_id = `TUP-${Date.now()}-${uuidv4().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 
     // 3. Create wallet for this user if it doesn't exist yet
     let wallet = await this.walletRepo.findOne({
@@ -89,7 +89,7 @@ export class WalletService {
     }
 
     // 2. Generate transaction ID
-    const transaction_id = `TXN${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`;
+    const transaction_id = `TXN-${Date.now()}-${uuidv4().replace(/-/g, '').slice(0, 12).toUpperCase()}`;
 
     // 3. Mock UPI payment link (looks like a real UPI deep-link)
     const payment_link = `upi://pay?pa=wallet@upi&pn=WalletApp&am=${topup.amount}&tn=${transaction_id}&cu=INR`;
