@@ -1,11 +1,20 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository }              from '@nestjs/typeorm';
-import { Repository }                    from 'typeorm';
-import { v4 as uuidv4 }                from 'uuid';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Inject,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository }       from 'typeorm';
+import { v4 as uuidv4 }    from 'uuid';
+import { CACHE_MANAGER }    from '@nestjs/cache-manager';
 
-import { Wallet }      from '../database/entities/wallet.entity';
-import { WalletTopup } from '../database/entities/wallet-topup.entity';
-import { Transaction } from '../database/entities/transaction.entity';
+
+import type { Cache } from 'cache-manager';
+
+import { Wallet }           from '../database/entities/wallet.entity';
+import { WalletTopup }      from '../database/entities/wallet-topup.entity';
+import { Transaction }      from '../database/entities/transaction.entity';
 import { CreateTopupDto }   from './dto/create-topup.dto';
 import { InitiateTopupDto } from './dto/initiate-topup.dto';
 
@@ -20,6 +29,9 @@ export class WalletService {
 
     @InjectRepository(Transaction)
     private transactionRepo: Repository<Transaction>,
+    
+    @Inject(CACHE_MANAGER)
+    private cacheManager: Cache,
   ) {}
 
   // ── API 1: POST /wallet/topup ──────────────────────────────────
@@ -103,9 +115,39 @@ export class WalletService {
     };
   }
 
-  // GET /wallet/:user_id — will be filled in next phase
+  // ── API 4: GET /wallet/:user_id ───────────────────────────────
   async getBalance(userId: string) {
-    return { message: 'getBalance stub' };
+
+    // 1. Build cache key for this user
+    const cacheKey = `wallet:balance:${userId}`;
+
+    // 2. Check Redis first
+    const cached = await this.cacheManager.get(cacheKey);
+    if (cached) {
+      return {
+        user_id:        userId,
+        wallet_balance: cached,
+        source:         'cache',   // shows where data came from
+      };
+    }
+
+    // 3. Cache miss — query Postgres
+    const wallet = await this.walletRepo.findOne({
+      where: { user_id: userId },
+    });
+
+    if (!wallet) {
+      throw new NotFoundException(`Wallet not found for user ${userId}`);
+    }
+
+    // 4. Store in Redis with 60 second TTL
+    await this.cacheManager.set(cacheKey, wallet.balance, 60000);
+
+    return {
+      user_id:        wallet.user_id,
+      wallet_balance: wallet.balance,
+      source:         'database',  // shows where data came from
+    };
   }
 
   // GET /wallet/topup/:topup_id — will be filled in next phase

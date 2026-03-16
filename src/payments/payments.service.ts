@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository }       from 'typeorm';
+
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+
+
+import type { Cache } from 'cache-manager';
 
 import { Wallet }      from '../database/entities/wallet.entity';
 import { WalletTopup } from '../database/entities/wallet-topup.entity';
@@ -18,6 +23,10 @@ export class PaymentsService {
 
     @InjectRepository(Transaction)
     private transactionRepo: Repository<Transaction>,
+
+    @Inject(CACHE_MANAGER)
+      private cacheManager: Cache,
+
   ) {}
 
   // ── API 3: POST /payments/webhook ──────────────────────────────
@@ -75,13 +84,15 @@ export class PaymentsService {
         { balance: newBalance },
       );
 
+      await this.cacheManager.del(`wallet:balance:${topup.user_id}`);
       // Update topup status → success
       await this.topupRepo.update(
         { topup_id: topup.topup_id },
         { status: 'success' },
       );
     }
-
+   
+    
     // 5. Handle failed path
     if (dto.payment_status === 'failed') {
       await this.topupRepo.update(
