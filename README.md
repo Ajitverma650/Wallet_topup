@@ -10,7 +10,7 @@ A production-grade backend service built with NestJS that allows users to add mo
 |-------|-----------|
 | Framework | NestJS (TypeScript) |
 | Database | PostgreSQL (Neon.tech) |
-| Cache | Redis (Upstash) |
+| Cache | Redis |
 | ORM | TypeORM |
 | Validation | class-validator |
 | QR Code | qrcode |
@@ -21,7 +21,7 @@ A production-grade backend service built with NestJS that allows users to add mo
 ## Features
 
 - Create wallet top-up requests with crypto-secure unique IDs
-- Initiate UPI payment with real scannable QR code (SVG) and payment deep-link
+- Initiate UPI payment with real scannable QR code and payment deep-link
 - Handle payment webhooks with **idempotent processing** + **pessimistic DB locking** to prevent race conditions
 - **ACID transactions** on all multi-table DB operations — full rollback on failure
 - **Atomic balance increment** — `balance = balance + X` in SQL, no read-modify-write race condition
@@ -31,7 +31,7 @@ A production-grade backend service built with NestJS that allows users to add mo
 - **Global exception filter** — consistent JSON error responses, no stack trace leaks
 - **DB indexes** on all lookup columns for fast queries at scale
 - Input validation on all endpoints via DTOs + ValidationPipe
-- Environment-based `synchronize` — auto-sync in dev, disabled in production
+- Environment-based `synchronize` — auto-sync in dev,will make disabled in production
 
 ---
 
@@ -70,7 +70,7 @@ src/
 - Node.js v18+
 - npm
 - A [Neon.tech](https://neon.tech) account (free PostgreSQL)
-- An [Upstash](https://upstash.com) account (free Redis)
+- An [Upstash](https://redis.com) account (free Redis)
 
 ---
 
@@ -80,7 +80,7 @@ src/
 
 ```bash
 git clone https://github.com/YOUR_USERNAME/wallet-topup-service.git
-cd wallet-topup-service
+cd WALLET_TOPUP
 ```
 
 ### 2. Install dependencies
@@ -95,15 +95,14 @@ Create a `.env` file in the project root:
 
 ```env
 DATABASE_URL=postgresql://your-neon-connection-string?sslmode=require
-REDIS_URL=rediss://default:your-password@your-endpoint.upstash.io:6379
+REDIS_URL=rediss://default:your-password@your-endpoint.redis.io:6379
 PORT=3000
-DB_SYNC=true
-NODE_ENV=development
+
 ```
 
 **Getting your credentials:**
 - `DATABASE_URL` → [Neon.tech](https://neon.tech) dashboard → Connection Details → copy the connection string
-- `REDIS_URL` → [Upstash](https://upstash.com) dashboard → your database → copy the Redis URL
+- `REDIS_URL` → [Upstash](https://redis.com) dashboard → your database → copy the Redis URL
 
 ### 4. Run the development server
 
@@ -194,13 +193,13 @@ POST /wallet/topup/initiate
 {
   "transaction_id": "TXN-1742142675456-B2E8A1C9F3D50714",
   "payment_link": "upi://pay?pa=wallet@upi&pn=WalletApp&am=500.00&tn=TXN-...&cu=INR",
-  "qr_code": "<svg xmlns='http://www.w3.org/2000/svg'>...</svg>",
+  "qr_code": "<..qr image",
   "status": "pending"
 }
 ```
 
 **Notes:**
-- `qr_code` is an SVG string — render as `<img src="data:image/svg+xml;base64,..." />` or `<div dangerouslySetInnerHTML={{ __html: qr_code }} />`
+- `qr_code` is  string 
 - Transaction expires after 10 minutes — webhook rejected after expiry
 - Both the transaction save and topup status update happen in a single ACID transaction — both succeed or both roll back
 
@@ -386,8 +385,6 @@ Run these 7 requests in order to simulate a full payment cycle:
 | `REDIS_URL` | Upstash Redis URL | your upstash URL | your upstash URL |
 | `PORT` | Server port | `3000` | `10000` |
 | `DB_SYNC` | Auto-sync DB schema | `true` | `false` |
-| `NODE_ENV` | Environment | `development` | `production` |
-
 ---
 
 ## Database Schema
@@ -446,8 +443,7 @@ Import `wallet-topup-collection.json` from the project root into Postman to get 
 | `DATABASE_URL` | Your Neon connection string |
 | `REDIS_URL` | Your Upstash Redis URL |
 | `PORT` | `10000` |
-| `DB_SYNC` | `false` |
-| `NODE_ENV` | `production` |
+| 
 
 ---
 
@@ -466,6 +462,5 @@ Import `wallet-topup-collection.json` from the project root into Postman to get 
 | **DB indexes** | `@Index()` on all WHERE clause columns — fast lookups at scale |
 | **Global exception filter** | Consistent 5-field JSON error response — no stack traces exposed to clients |
 | **Input validation** | DTOs + `class-validator` + global `ValidationPipe` on all endpoints |
-| **Real QR code** | SVG generated from UPI deep-link — scannable by GPay, PhonePe, Paytm |
-| **Environment-based sync** | `DB_SYNC=false` in production — schema never auto-modified on Render |
+| **Real QR code** | qr generated from UPI deep-link — scannable by GPay, PhonePe, Paytm |
 | **Topup status lifecycle** | `pending → initiated → success/failed` — granular state tracking |
