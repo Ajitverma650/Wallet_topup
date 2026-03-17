@@ -11,28 +11,27 @@ export class Transaction {
 
   @PrimaryGeneratedColumn()
   id: number;
-   
+
   @Index()
   @Column({ unique: true })
-  transaction_id: string;        // e.g. "TXN87654"
+  transaction_id: string;
 
+  @Index()
   @Column()
-  topup_id: string;              // links back to wallet_topups
+  topup_id: string;
 
   @Column({ nullable: true })
-  payment_link: string;          // UPI payment URL
+  payment_link: string;
 
-  @Column({ nullable: true })
-  qr_code: string;      // base64 QR string
 
-  @Column({ type: 'timestamp',nullable: true })   // ← ADD THIS
-  expires_at: Date;
+  @Column({ type: 'timestamp', nullable: true })
+  expires_at: Date | null;
 
   @Column({ default: 'pending' })
-  payment_status: PaymentStatus;  // pending | success | failed
+  payment_status: PaymentStatus;
 
   @Column({ default: false })
-  processed: boolean;            // for idempotent webhook handling
+  processed: boolean;
 
   @CreateDateColumn()
   created_at: Date;

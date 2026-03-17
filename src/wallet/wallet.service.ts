@@ -109,7 +109,6 @@ async initiateTopup(dto: InitiateTopupDto) {
         transaction_id,
         topup_id:       dto.topup_id,
         payment_link,
-        qr_code,
         payment_status: 'pending',
         processed:      false,
         expires_at:     new Date(Date.now() + 10 * 60 * 1000),
@@ -124,12 +123,11 @@ async initiateTopup(dto: InitiateTopupDto) {
       await queryRunner.commitTransaction();
 
       return {
-        transaction_id: savedTxn.transaction_id,
-        payment_link:   savedTxn.payment_link,
-        qr_code:        savedTxn.qr_code,
-        status:         savedTxn.payment_status,
-
-      };
+         transaction_id: savedTxn.transaction_id,
+         payment_link:   savedTxn.payment_link,
+         qr_code,        // ← generated fresh, returned but not stored
+         status:         savedTxn.payment_status,
+       };
 
     } catch (err) {
       await queryRunner.rollbackTransaction();
