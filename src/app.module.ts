@@ -8,7 +8,6 @@ import { Wallet }      from './database/entities/wallet.entity';
 import { WalletTopup } from './database/entities/wallet-topup.entity';
 import { Transaction } from './database/entities/transaction.entity';
 
-// these 2 will still show red until we create them next
 import { WalletModule }   from './wallet/wallet.module';
 import { PaymentsModule } from './payments/payments.module';
 

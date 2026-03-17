@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   InternalServerErrorException,
+  BadRequestException,
   Inject,
   Logger,
 } from '@nestjs/common';
@@ -57,6 +58,12 @@ export class PaymentsService {
         payment_status: transaction.payment_status,
       };
     }
+
+    if (new Date() > transaction.expires_at) {
+  throw new BadRequestException(
+    'Payment link expired — please create a new topup request'
+  );
+}
 
     // 3. Find the linked topup
     const topup = await this.topupRepo.findOne({

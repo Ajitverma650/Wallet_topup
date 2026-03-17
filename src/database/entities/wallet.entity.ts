@@ -1,6 +1,7 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn
+  CreateDateColumn, UpdateDateColumn,
+  Index
 } from 'typeorm';
 
 @Entity('wallets')
@@ -8,7 +9,8 @@ export class Wallet {
 
   @PrimaryGeneratedColumn()
   id: number;
-
+  
+  @Index()  
   @Column({ unique: true })
   user_id: string;               // e.g. "U123"
 

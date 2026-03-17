@@ -2,10 +2,12 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  InternalServerErrorException,
+  Logger,
   Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository }       from 'typeorm';
+import { Repository ,DataSource}       from 'typeorm';
 import { randomUUID }       from 'crypto';
 import { CACHE_MANAGER }    from '@nestjs/cache-manager';
 
@@ -20,6 +22,7 @@ import { InitiateTopupDto } from './dto/initiate-topup.dto';
 
 @Injectable()
 export class WalletService {
+  private readonly logger = new Logger(WalletService.name);
   constructor(
     @InjectRepository(Wallet)
     private walletRepo: Repository<Wallet>,
@@ -32,6 +35,10 @@ export class WalletService {
     
     @Inject(CACHE_MANAGER)
     private cacheManager: Cache,
+
+    private dataSource: DataSource,
+
+    
   ) {}
 
   // ── API 1: POST /wallet/topup ──────────────────────────────────
@@ -69,52 +76,69 @@ export class WalletService {
       status:   topup.status,
     };
   }
+async initiateTopup(dto: InitiateTopupDto) {
 
-  // ── API 2: POST /wallet/topup/initiate ────────────────────────
-  async initiateTopup(dto: InitiateTopupDto) {
-
-    // 1. Find the topup request
+    // Pre-flight checks — outside transaction
     const topup = await this.topupRepo.findOne({
       where: { topup_id: dto.topup_id },
     });
-
     if (!topup) {
       throw new NotFoundException(`Topup ${dto.topup_id} not found`);
     }
-
     if (topup.status !== 'pending') {
       throw new BadRequestException(
         `Topup is already ${topup.status} — cannot initiate again`
       );
     }
 
-    // 2. Generate transaction ID
-    const transaction_id = `TXN-${Date.now()}-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+    // Generate IDs + payment details — no DB yet
+    const transaction_id = `TXN-${Date.now()}-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
 
-    // 3. Mock UPI payment link (looks like a real UPI deep-link)
-    const payment_link = `upi://pay?pa=wallet@upi&pn=WalletApp&am=${topup.amount}&tn=${transaction_id}&cu=INR`;
+    const payment_link  = `upi://pay?pa=wallet@upi&pn=WalletApp&am=${topup.amount}&tn=${transaction_id}&cu=INR`;
+    const qr_code       = Buffer.from(payment_link).toString('base64');
 
-    // 4. Mock QR code (base64 encoded version of the payment link)
-    const qr_code = Buffer.from(payment_link).toString('base64');
+    // ACID transaction — both writes succeed or both roll back
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // 5. Save transaction to DB
-    const transaction = await this.transactionRepo.save({
-      transaction_id,
-      topup_id:       dto.topup_id,
-      payment_link,
-      qr_code,
-      payment_status: 'pending',
-      processed:      false,
-    });
+    try {
+      // Write 1 — save transaction row
+      const savedTxn = await queryRunner.manager.save(Transaction, {
+        transaction_id,
+        topup_id:       dto.topup_id,
+        payment_link,
+        qr_code,
+        payment_status: 'pending',
+        processed:      false,
+        expires_at:     new Date(Date.now() + 10 * 60 * 1000),
+      });
 
-    return {
-      transaction_id: transaction.transaction_id,
-      payment_link:   transaction.payment_link,
-      qr_code:        transaction.qr_code,
-      status:         transaction.payment_status,
-    };
+      // Write 2 — update topup status to "initiated"
+      await queryRunner.manager.update(WalletTopup,
+        { topup_id: dto.topup_id },
+        { status: 'initiated' },
+      );
+
+      await queryRunner.commitTransaction();
+
+      return {
+        transaction_id: savedTxn.transaction_id,
+        payment_link:   savedTxn.payment_link,
+        qr_code:        savedTxn.qr_code,
+        status:         savedTxn.payment_status,
+
+      };
+
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error('initiateTopup transaction failed, rolled back', err);
+      throw new InternalServerErrorException('Could not initiate payment — please retry');
+
+    } finally {
+      await queryRunner.release();
+    }
   }
-
   // ── API 4: GET /wallet/:user_id ───────────────────────────────
   async getBalance(userId: string) {
 
@@ -173,4 +197,4 @@ export class WalletService {
     transaction_id: transaction?.transaction_id ?? null,
   };
     }
-}
+}

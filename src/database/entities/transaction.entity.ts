@@ -1,6 +1,7 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn
+  CreateDateColumn, UpdateDateColumn,
+  Index
 } from 'typeorm';
 
 export type PaymentStatus = 'pending' | 'success' | 'failed';
@@ -10,7 +11,8 @@ export class Transaction {
 
   @PrimaryGeneratedColumn()
   id: number;
-
+   
+  @Index()
   @Column({ unique: true })
   transaction_id: string;        // e.g. "TXN87654"
 
@@ -21,7 +23,10 @@ export class Transaction {
   payment_link: string;          // UPI payment URL
 
   @Column({ nullable: true })
-  qr_code: string;               // base64 QR string
+  qr_code: string;      // base64 QR string
+
+  @Column({ type: 'timestamp' })   // ← ADD THIS
+  expires_at: Date;
 
   @Column({ default: 'pending' })
   payment_status: PaymentStatus;  // pending | success | failed

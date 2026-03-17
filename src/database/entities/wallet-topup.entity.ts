@@ -1,16 +1,18 @@
 import {
   Entity, PrimaryGeneratedColumn, Column,
-  CreateDateColumn, UpdateDateColumn
+  CreateDateColumn, UpdateDateColumn,
+  Index
 } from 'typeorm';
 
-export type TopupStatus = 'pending' | 'success' | 'failed';
+export type TopupStatus = 'pending' | 'initiated' | 'success' | 'failed';
 
 @Entity('wallet_topups')
 export class WalletTopup {
 
   @PrimaryGeneratedColumn()
   id: number;
-
+  
+  @Index()  
   @Column({ unique: true })
   topup_id: string;              // e.g. "TUP123456"
 
@@ -21,7 +23,7 @@ export class WalletTopup {
   amount: number;                // e.g. 500.00
 
   @Column({ default: 'pending' })
-  status: TopupStatus;           // pending | success | failed
+  status: TopupStatus;           // pending | initiated | success | failed
 
   @CreateDateColumn()
   created_at: Date;
