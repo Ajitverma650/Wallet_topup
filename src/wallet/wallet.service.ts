@@ -50,8 +50,8 @@ export class WalletService {
       throw new BadRequestException('Amount must be greater than 0');
     }
 
-    // 2. Generate unique topup ID → "TUP" + 10 random chars
-    const topup_id = `TUP-${Date.now()}-${randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+    // 2. Generate unique topup ID → "TUP" + 16 random chars
+    const topup_id = `TUP-${Date.now()}-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
 
     // 3. Create wallet for this user if it doesn't exist yet
     let wallet = await this.walletRepo.findOne({

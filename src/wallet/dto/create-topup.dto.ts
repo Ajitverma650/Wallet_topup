@@ -16,7 +16,7 @@ export class CreateTopupDto {
   @Transform(({ value }) => Number(value))
   @IsNumber()
   @IsPositive()
-  @Min(0.01, { message: 'Amount must be at least 0.01' })
+  @Min(0.1, { message: 'Amount must be at least 0.1' })
   @Max(100_000, { message: 'Amount cannot exceed 100,000' })
   amount: number;
 }
