@@ -40,18 +40,37 @@ export class PaymentsService {
   // ── API 3: POST /payments/webhook ──────────────────────────────
   async handleWebhook(dto: WebhookDto) {
 
-    // ── Pre-flight checks (outside transaction to avoid locking) ──
+  // 1. Quick existence check only — no lock yet
+  const exists = await this.transactionRepo.findOne({
+    where: { transaction_id: dto.transaction_id },
+  });
+  if (!exists) {
+    throw new NotFoundException(`Transaction ${dto.transaction_id} not found`);
+  }
 
-    // 1. Find the transaction
-    const transaction = await this.transactionRepo.findOne({
+  // 2. Open transaction FIRST — then do locked read inside it
+  const queryRunner = this.dataSource.createQueryRunner();
+  await queryRunner.connect();
+  await queryRunner.startTransaction();
+
+  try {
+    // 3. SELECT FOR UPDATE — locks the row
+    // Second request waits here until first commits/rollbacks
+    const transaction = await queryRunner.manager.findOne(Transaction, {
       where: { transaction_id: dto.transaction_id },
+      lock:  { mode: 'pessimistic_write' },  // ← the fix
     });
+
+    // ← ADD THIS — null check after locked read
     if (!transaction) {
-      throw new NotFoundException(`Transaction ${dto.transaction_id} not found`);
+     await queryRunner.rollbackTransaction();
+         throw new NotFoundException(`Transaction ${dto.transaction_id} not found`);
     }
 
-    // 2. Idempotency guard — already processed, return early
+    // 4. Idempotency check — now race-condition safe
+    // Because row is locked, no other request can read it here
     if (transaction.processed) {
+      await queryRunner.rollbackTransaction();
       return {
         message:        'Webhook already processed — skipping',
         transaction_id: transaction.transaction_id,
@@ -59,97 +78,96 @@ export class PaymentsService {
       };
     }
 
-    if (new Date() > transaction.expires_at) {
-  throw new BadRequestException(
-    'Payment link expired — please create a new topup request'
-  );
-}
+    // 5. Expiry check — inside lock
+    if (transaction.expires_at && new Date() > transaction.expires_at) {
+      await queryRunner.rollbackTransaction();
+      throw new BadRequestException(
+        'Payment link expired — please create a new topup request'
+      );
+    }
 
-    // 3. Find the linked topup
-    const topup = await this.topupRepo.findOne({
+    // 6. Find linked topup — inside transaction
+    const topup = await queryRunner.manager.findOne(WalletTopup, {
       where: { topup_id: transaction.topup_id },
     });
     if (!topup) {
       throw new NotFoundException(`Topup ${transaction.topup_id} not found`);
     }
 
-    // ── Wrap all DB writes in a single atomic transaction ──────────
-    const queryRunner = this.dataSource.createQueryRunner();
-    await queryRunner.connect();
-    await queryRunner.startTransaction();
-
-    try {
-
-      if (dto.payment_status === 'success') {
-
-        // Ensure wallet row exists (use the same queryRunner manager)
-        const walletExists = await queryRunner.manager.findOne(Wallet, {
-          where: { user_id: topup.user_id },
-        });
-        if (!walletExists) {
-          await queryRunner.manager.save(Wallet, {
-            user_id: topup.user_id,
-            balance: 0,
-          });
-        }
-
-        // ✅ FIX: Atomic increment — no read-then-write race condition
-        // "balance = balance + X" is evaluated atomically by PostgreSQL
-        await queryRunner.manager
-          .createQueryBuilder()
-          .update(Wallet)
-          .set({ balance: () => `balance + ${Number(topup.amount)}` })
-          .where('user_id = :userId', { userId: topup.user_id })
-          .execute();
-
-        // Update topup status
-        await queryRunner.manager.update(
-          WalletTopup,
-          { topup_id: topup.topup_id },
-          { status: 'success' },
-        );
-      }
-
-      if (dto.payment_status === 'failed') {
-        await queryRunner.manager.update(
-          WalletTopup,
-          { topup_id: topup.topup_id },
-          { status: 'failed' },
-        );
-      }
-
-      // Mark transaction as processed (idempotency flag)
-      await queryRunner.manager.update(
-        Transaction,
-        { transaction_id: dto.transaction_id },
-        { payment_status: dto.payment_status, processed: true },
-      );
-
-      await queryRunner.commitTransaction();
-
-    } catch (err) {
-      await queryRunner.rollbackTransaction();
-      this.logger.error('Webhook DB transaction failed, rolled back', err);
-      throw new InternalServerErrorException('Payment processing failed — please retry');
-    } finally {
-      await queryRunner.release();
-    }
-
-    // ── Invalidate Redis cache (best-effort, never breaks the payment) ──
     if (dto.payment_status === 'success') {
-      try {
-        await this.cacheManager.del(`wallet:balance:${topup.user_id}`);
-      } catch (cacheErr) {
-        this.logger.warn(
-          `Cache invalidation failed for user ${topup.user_id}: ${cacheErr.message}`,
-        );
+
+      // Ensure wallet exists
+      const walletExists = await queryRunner.manager.findOne(Wallet, {
+        where: { user_id: topup.user_id },
+      });
+      if (!walletExists) {
+        await queryRunner.manager.save(Wallet, {
+          user_id: topup.user_id,
+          balance: 0,
+        });
       }
+
+      // Atomic balance increment
+      await queryRunner.manager
+        .createQueryBuilder()
+        .update(Wallet)
+        .set({ balance: () => `balance + ${Number(topup.amount)}` })
+        .where('user_id = :userId', { userId: topup.user_id })
+        .execute();
+
+      // Update topup status
+      await queryRunner.manager.update(
+        WalletTopup,
+        { topup_id: topup.topup_id },
+        { status: 'success' },
+      );
     }
 
-    return {
-      message:        `Payment ${dto.payment_status} — wallet updated`,
-      transaction_id: dto.transaction_id,
-      payment_status: dto.payment_status,
-    };
+    if (dto.payment_status === 'failed') {
+      await queryRunner.manager.update(
+        WalletTopup,
+        { topup_id: topup.topup_id },
+        { status: 'failed' },
+      );
+    }
+
+    // Mark processed — last step
+    await queryRunner.manager.update(
+      Transaction,
+      { transaction_id: dto.transaction_id },
+      { payment_status: dto.payment_status, processed: true },
+    );
+
+    await queryRunner.commitTransaction();
+
+  } catch (err) {
+    await queryRunner.rollbackTransaction();
+    // Re-throw NestJS HTTP exceptions as-is — don't wrap them
+    if (err?.status) throw err;
+    this.logger.error('Webhook DB transaction failed, rolled back', err);
+    throw new InternalServerErrorException('Payment processing failed — please retry');
+  } finally {
+    await queryRunner.release();
   }
+
+  // Cache invalidation — outside transaction, best-effort
+  const topup = await this.topupRepo.findOne({
+    where: { topup_id: exists.topup_id },
+  });
+  if (dto.payment_status === 'success' && topup) {
+    try {
+      await this.cacheManager.del(`wallet:balance:${topup.user_id}`);
+    } catch (cacheErr) {
+      this.logger.warn(
+        `Cache invalidation failed: ${cacheErr.message}`,
+      );
+    }
+  }
+
+  return {
+    message:        `Payment ${dto.payment_status} — wallet updated`,
+    transaction_id: dto.transaction_id,
+    payment_status: dto.payment_status,
+  };
+}
 }

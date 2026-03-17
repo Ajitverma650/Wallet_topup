@@ -11,6 +11,7 @@ import { Repository ,DataSource}       from 'typeorm';
 import { randomUUID }       from 'crypto';
 import { CACHE_MANAGER }    from '@nestjs/cache-manager';
 
+import * as QRCode from 'qrcode';
 
 import type { Cache } from 'cache-manager';
 
@@ -95,7 +96,7 @@ async initiateTopup(dto: InitiateTopupDto) {
     const transaction_id = `TXN-${Date.now()}-${randomUUID().replace(/-/g, '').slice(0, 16).toUpperCase()}`;
 
     const payment_link  = `upi://pay?pa=wallet@upi&pn=WalletApp&am=${topup.amount}&tn=${transaction_id}&cu=INR`;
-    const qr_code       = Buffer.from(payment_link).toString('base64');
+    const qr_code = await QRCode.toDataURL(payment_link, { width: 300, margin: 2 });
 
     // ACID transaction — both writes succeed or both roll back
     const queryRunner = this.dataSource.createQueryRunner();

@@ -25,7 +25,7 @@ export class Transaction {
   @Column({ nullable: true })
   qr_code: string;      // base64 QR string
 
-  @Column({ type: 'timestamp' })   // ← ADD THIS
+  @Column({ type: 'timestamp',nullable: true })   // ← ADD THIS
   expires_at: Date;
 
   @Column({ default: 'pending' })
