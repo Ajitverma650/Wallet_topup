@@ -77,6 +77,7 @@ export class WalletService {
       status:   topup.status,
     };
   }
+  
 async initiateTopup(dto: InitiateTopupDto) {
 
     // Pre-flight checks — outside transaction
@@ -164,7 +165,7 @@ async initiateTopup(dto: InitiateTopupDto) {
     }
 
     // 4. Store in Redis with 60 second TTL
-    await this.cacheManager.set(cacheKey, wallet.balance, 60000);
+    await this.cacheManager.set(cacheKey, wallet.balance, 600000);
 
     return {
       user_id:        wallet.user_id,
@@ -174,7 +175,7 @@ async initiateTopup(dto: InitiateTopupDto) {
   }
 
   
-  // GET /wallet/topup/:topup_id — will be filled in next phase
+  // GET /wallet/topup/:topup_id — 
   async getTopupStatus(topupId: string) {
 
   const topup = await this.topupRepo.findOne({

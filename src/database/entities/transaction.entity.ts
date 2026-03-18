@@ -12,12 +12,12 @@ export class Transaction {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Index()
+  
   @Column({ unique: true })
   transaction_id: string;
 
-  @Index()
-  @Column()
+  
+  @Column({ unique: true })
   topup_id: string;
 
   @Column({ nullable: true })

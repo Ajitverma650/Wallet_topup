@@ -10,7 +10,7 @@ export class Wallet {
   @PrimaryGeneratedColumn()
   id: number;
   
-  @Index()  
+ 
   @Column({ unique: true })
   user_id: string;               // e.g. "U123"
 

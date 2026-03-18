@@ -2,7 +2,8 @@ import { Module }                    from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule }              from '@nestjs/typeorm';
 import { CacheModule }               from '@nestjs/cache-manager';
-import { redisStore }                from 'cache-manager-ioredis-yet';
+import Keyv from 'keyv';
+import KeyvRedis from '@keyv/redis';
 
 import { Wallet }      from './database/entities/wallet.entity';
 import { WalletTopup } from './database/entities/wallet-topup.entity';
@@ -31,11 +32,17 @@ import { PaymentsModule } from './payments/payments.module';
       isGlobal:   true,
       imports:    [ConfigModule],
       inject:     [ConfigService],
-      useFactory: async (config: ConfigService) => ({
-        store: redisStore,
-        url:   config.get<string>('REDIS_URL'),
-        ttl:   60000, // 60 seconds cache TTL
-      }),
+      useFactory: async (config: ConfigService) => {
+        const redisUrl = config.get<string>('REDIS_URL') || 'redis://localhost:6379';
+        
+        try {
+          const store = new KeyvRedis(redisUrl);
+          return { stores: [new Keyv({ store, ttl: 600000 })] };
+        } catch (err) {
+          console.error('[CacheModule] Failed to connect to Redis!', err);
+          throw err;
+        }
+      },
     }),
 
     WalletModule,

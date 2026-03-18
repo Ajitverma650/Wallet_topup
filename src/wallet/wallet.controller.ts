@@ -28,7 +28,7 @@ export class WalletController {
     return this.walletService.initiateTopup(dto);
   }
 
-  // ✅ FIX: static-prefix routes MUST come before dynamic wildcard routes
+  
   // GET /wallet/topup/:topup_id  ← declare first
   @ApiOperation({ summary: 'Get topup status', description: 'Returns current status (pending/success/failed) and linked transaction_id for a given topup.' })
   @ApiParam({ name: 'topup_id', example: 'TXN-1710000000000-ABC123EF' })
@@ -49,4 +49,4 @@ export class WalletController {
     return this.walletService.getBalance(userId);
   }
 }
-
+

@@ -12,7 +12,7 @@ export class WalletTopup {
   @PrimaryGeneratedColumn()
   id: number;
   
-  @Index()  
+
   @Column({ unique: true })
   topup_id: string;              // e.g. "TUP123456"
 
